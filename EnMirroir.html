@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>EnMiroir — Le jeu de couple en ligne</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script>
+tailwind.config={theme:{extend:{fontFamily:{display:['Playfair Display','serif'],body:['DM Sans','sans-serif']}}}}
+</script>
+<style>
+:root{
+  --bg:#12101c;--bg2:#1c1829;--card:#241f35;--elevated:#2e2845;
+  --coral:#e8845c;--coral-dim:rgba(232,132,92,.15);
+  --teal:#5cb8b2;--teal-dim:rgba(92,184,178,.15);
+  --txt:#f0ebe3;--txt2:#b0a6c4;--muted:#6e6286;
+  --gold:#f0c75e;--gold-dim:rgba(240,199,94,.15);
+  --danger:#e85c6a;--danger-dim:rgba(232,92,106,.12);
+  --success:#5ce88a;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif}
+#app{position:relative;width:100%;max-width:480px;height:100dvh;margin:0 auto;overflow:hidden;background:var(--bg)}
+
+.bg-orb{position:fixed;border-radius:50%;filter:blur(90px);opacity:.12;pointer-events:none;z-index:0}
+.bg-orb-1{width:320px;height:320px;background:var(--coral);top:-80px;left:-80px;animation:orb1 22s ease-in-out infinite}
+.bg-orb-2{width:280px;height:280px;background:var(--teal);bottom:-60px;right:-60px;animation:orb2 26s ease-in-out infinite}
+@keyframes orb1{0%,100%{transform:translate(0,0)}50%{transform:translate(40px,60px)}}
+@keyframes orb2{0%,100%{transform:translate(0,0)}50%{transform:translate(-50px,-40px)}}
+
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;pointer-events:none;transform:translateY(20px);transition:opacity .4s ease,transform .4s ease;z-index:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:24px 20px}
+.screen.active{opacity:1;pointer-events:all;transform:translateY(0);z-index:2}
+
+#score-bar{position:absolute;top:0;left:0;right:0;z-index:10;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,var(--bg) 60%,transparent);transform:translateY(-100%);transition:transform .4s ease;pointer-events:none}
+#score-bar.visible{transform:translateY(0);pointer-events:all}
+.sb-player{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
+.sb-dot{width:10px;height:10px;border-radius:50%}
+.sb-score{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;transition:transform .3s ease}
+.sb-score.pop{transform:scale(1.4)}
+
+#progress-bar{position:absolute;top:58px;left:16px;right:16px;height:3px;background:var(--elevated);border-radius:2px;z-index:10;opacity:0;transition:opacity .4s ease}
+#progress-bar.visible{opacity:1}
+#progress-fill{height:100%;background:linear-gradient(90deg,var(--coral),var(--gold));border-radius:2px;transition:width .5s ease}
+
+.input-field{width:100%;padding:14px 16px;background:var(--card);border:1.5px solid rgba(255,255,255,.06);border-radius:14px;color:var(--txt);font-family:'DM Sans',sans-serif;font-size:16px;outline:none;transition:border-color .2s}
+.input-field:focus{border-color:rgba(255,255,255,.15)}
+.input-field::placeholder{color:var(--muted)}
+textarea.input-field{resize:none;min-height:100px;line-height:1.6}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:16px 28px;border:none;border-radius:16px;font-family:'DM Sans',sans-serif;font-size:16px;font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .2s;user-select:none}
+.btn:active{transform:scale(.96)}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.btn-primary{background:var(--gold);color:#1a1520;box-shadow:0 4px 20px rgba(240,199,94,.25)}
+.btn-ghost{background:transparent;border:1.5px solid rgba(255,255,255,.1);color:var(--txt2)}
+.btn-block{width:100%}
+
+.pill-group{display:flex;gap:8px}
+.pill{padding:10px 20px;border-radius:100px;border:1.5px solid rgba(255,255,255,.08);background:var(--card);color:var(--txt2);font-size:15px;font-weight:500;cursor:pointer;transition:all .2s;flex:1;text-align:center}
+.pill.active{border-color:var(--gold);background:var(--gold-dim);color:var(--gold);font-weight:600}
+
+.q-card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:20px;padding:24px;position:relative;overflow:hidden}
+.q-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.q-card.coral::before{background:var(--coral)}
+.q-card.teal::before{background:var(--teal)}
+.q-card-header{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:14px;text-transform:uppercase;letter-spacing:.5px}
+.q-card-text{font-family:'Playfair Display',serif;font-size:19px;line-height:1.6}
+
+.eval-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 12px;border-radius:16px;border:1.5px solid rgba(255,255,255,.06);background:var(--card);color:var(--txt2);font-size:14px;font-weight:500;cursor:pointer;transition:all .2s;flex:1}
+.eval-btn:active{transform:scale(.95)}
+.eval-btn .pts{font-family:'Playfair Display',serif;font-size:26px;font-weight:700}
+.eval-btn.perfect{border-color:rgba(240,199,94,.3)}.eval-btn.perfect .pts{color:var(--gold)}
+.eval-btn.medium .pts{color:var(--txt2)}
+.eval-btn.bad{border-color:rgba(232,92,106,.15)}.eval-btn.bad .pts{color:var(--danger);opacity:.7}
+
+.btn-joker{flex:1;flex-direction:column;gap:6px;padding:16px 12px;border-radius:16px;background:var(--card);border:1.5px solid rgba(255,255,255,.06);color:var(--txt2);font-size:13px}
+.btn-joker i{font-size:20px}
+.btn-joker:disabled{opacity:.3}
+
+#score-popup{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(18,16,28,.7);backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .3s}
+#score-popup.show{opacity:1;pointer-events:all}
+.sp-card{text-align:center;transform:scale(.7);transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
+#score-popup.show .sp-card{transform:scale(1)}
+.sp-amount{font-family:'Playfair Display',serif;font-size:64px;font-weight:900;line-height:1}
+
+#toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-120px);background:var(--elevated);color:var(--txt);padding:12px 24px;border-radius:12px;z-index:100;transition:transform .35s ease;font-size:14px;font-weight:500;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+#toast.show{transform:translateX(-50%) translateY(0)}
+
+.waiting-dots span{animation:dot 1.4s infinite;opacity:0}
+.waiting-dots span:nth-child(2){animation-delay:.2s}
+.waiting-dots span:nth-child(3){animation-delay:.4s}
+@keyframes dot{0%,80%,100%{opacity:0}40%{opacity:1}}
+
+.victory-crown{font-size:48px;color:var(--gold);animation:crown-bob 2s ease-in-out infinite}
+@keyframes crown-bob{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-8px) rotate(3deg)}}
+.score-bar-v{height:10px;border-radius:5px;background:var(--elevated);overflow:hidden;margin-top:6px}
+.score-bar-fill{height:100%;border-radius:5px;transition:width 1.2s ease}
+.stat-card{background:var(--card);border-radius:14px;padding:16px;text-align:center;border:1px solid rgba(255,255,255,.04)}
+.stat-val{font-family:'Playfair Display',serif;font-size:28px;font-weight:700}
+.stat-label{font-size:11px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+
+#confetti{position:fixed;inset:0;z-index:40;pointer-events:none}
+
+.code-display{font-family:'Courier New',monospace;font-size:36px;font-weight:700;letter-spacing:8px;color:var(--gold);background:var(--card);padding:16px 32px;border-radius:16px;border:2px dashed rgba(240,199,94,.3);cursor:pointer;transition:background .2s}
+.code-display:active{background:var(--elevated)}
+
+@media(prefers-reduced-motion:reduce){.bg-orb,.victory-crown{animation:none!important}.screen{transition:opacity .15s!important;transform:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="bg-orb bg-orb-1"></div>
+  <div class="bg-orb bg-orb-2"></div>
+
+  <div id="score-bar">
+    <div class="sb-player"><div class="sb-dot" style="background:var(--coral)"></div><span id="sb-name1">P1</span><span class="sb-score" id="sb-score1">0</span></div>
+    <div style="font-size:11px;color:var(--muted);text-align:center" id="sb-center">1/10</div>
+    <div class="sb-player"><span class="sb-score" id="sb-score2">0</span><span id="sb-name2">P2</span><div class="sb-dot" style="background:var(--teal)"></div></div>
+  </div>
+  <div id="progress-bar"><div id="progress-fill" style="width:0%"></div></div>
+
+  <!-- LOBBY -->
+  <div id="screen-lobby" class="screen active" style="justify-content:center;gap:32px">
+    <div style="text-align:center">
+      <div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;font-weight:600">Le jeu de couple</div>
+      <h1 style="font-family:'Playfair Display',serif;font-size:48px;font-weight:900;background:linear-gradient(135deg,var(--txt),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent">EnMiroir</h1>
+      <p style="color:var(--txt2);margin-top:12px;font-size:14px">Connectez-vous à deux pour jouer.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px">Votre prénom</div>
+        <input class="input-field" id="my-name" placeholder="Ex: Alex" maxlength="15" autocomplete="off">
+      </div>
+      <button class="btn btn-primary btn-block" id="btn-create" style="margin-top:8px">
+        <i class="fa-solid fa-plus"></i> Créer une partie
+      </button>
+      <div style="display:flex;align-items:center;gap:12px;margin:8px 0">
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>
+        <span style="font-size:12px;color:var(--muted)">OU</span>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input class="input-field" id="join-code" placeholder="Code salon" maxlength="6" style="text-transform:uppercase;letter-spacing:4px;text-align:center;font-weight:700">
+        <button class="btn btn-ghost" id="btn-join" style="white-space:nowrap">Rejoindre</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAITING ROOM (HOST) -->
+  <div id="screen-waiting" class="screen" style="justify-content:center;align-items:center;text-align:center;gap:24px">
+    <div style="font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:1px">Code du salon</div>
+    <div class="code-display" id="room-code" title="Appuyez pour copier">------</div>
+    <p style="font-size:14px;color:var(--txt2)">Partagez ce code avec votre partenaire</p>
+    <div style="margin-top:16px;font-size:14px;color:var(--muted)" class="waiting-dots">
+      En attente du deuxième joueur<span>.</span><span>.</span><span>.</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="btn-cancel-wait" style="margin-top:24px">Annuler</button>
+  </div>
+
+  <!-- CONFIG & PREP -->
+  <div id="screen-prep" class="screen" style="gap:20px">
+    <div>
+      <div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px">Préparation secrète</div>
+      <h2 style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700">Écrivez vos questions</h2>
+    </div>
+    <div id="config-area">
+      <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px">Nombre de questions par joueur</div>
+      <div class="pill-group" id="prep-pills">
+        <div class="pill" data-count="5">5</div>
+        <div class="pill active" data-count="10">10</div>
+        <div class="pill" data-count="15">15</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="flex:1;height:4px;background:var(--elevated);border-radius:2px;overflow:hidden">
+        <div id="prep-progress" style="height:100%;background:var(--gold);border-radius:2px;transition:width .3s ease;width:0%"></div>
+      </div>
+      <span style="font-size:13px;color:var(--muted);font-weight:500" id="prep-counter">1/10</span>
+    </div>
+    <textarea class="input-field" id="prep-input" placeholder="Tape ta question ici..."></textarea>
+    <button class="btn btn-ghost btn-sm" id="btn-inspo"><i class="fa-regular fa-lightbulb"></i> Inspiration</button>
+    <div id="inspo-text" style="display:none;padding:12px;background:var(--elevated);border-radius:12px;color:var(--txt2);font-size:14px;line-height:1.5;cursor:pointer"></div>
+    <div style="flex:1"></div>
+    <button class="btn btn-primary btn-block" id="btn-prep-val">Question suivante <i class="fa-solid fa-arrow-right"></i></button>
+  </div>
+
+  <!-- WAITING FOR OPPONENT PREP -->
+  <div id="screen-waiting-prep" class="screen" style="justify-content:center;align-items:center;text-align:center;gap:16px">
+    <i class="fa-solid fa-check-circle" style="font-size:48px;color:var(--success)"></i>
+    <h2 style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700">Vos questions sont prêtes !</h2>
+    <p style="color:var(--muted)" class="waiting-dots">En attente de l'autre joueur<span>.</span><span>.</span><span>.</span></p>
+  </div>
+
+  <!-- GAME: ASKER VIEW -->
+  <div id="screen-ask" class="screen" style="padding-top:80px;gap:20px">
+    <div style="text-align:center">
+      <span style="font-size:13px;color:var(--muted)">Posez votre question à</span>
+      <h2 style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--teal)" id="ask-target-name">Partenaire</h2>
+    </div>
+    <div class="q-card coral">
+      <div class="q-card-header"><i class="fa-regular fa-message"></i> Votre question</div>
+      <p class="q-card-text" id="ask-q-text">...</p>
+    </div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center">
+      <div style="text-align:center;color:var(--muted)" class="waiting-dots">
+        <i class="fa-solid fa-hourglass-half" style="font-size:24px;display:block;margin-bottom:12px;opacity:.5"></i>
+        Attendez la réponse<span>.</span><span>.</span><span>.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME: RESPONDER VIEW -->
+  <div id="screen-respond" class="screen" style="padding-top:80px;gap:20px">
+    <div style="text-align:center">
+      <span style="font-size:13px;color:var(--muted)">Question de</span>
+      <h2 style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--coral)" id="resp-asker-name">Partenaire</h2>
+    </div>
+    <div class="q-card coral">
+      <div class="q-card-header"><i class="fa-regular fa-message"></i> Question</div>
+      <p class="q-card-text" id="resp-q-text">...</p>
+    </div>
+    <p style="text-align:center;font-size:13px;color:var(--muted);font-style:italic">Répondez à voix haute, puis validez</p>
+    <button class="btn btn-primary btn-block" id="btn-answered"><i class="fa-solid fa-check"></i> J'ai répondu</button>
+    <div style="height:1px;background:rgba(255,255,255,.06)"></div>
+    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px">Jokers</div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-joker" id="btn-shield"><i class="fa-solid fa-shield-halved" style="color:var(--coral)"></i>Bouclier<span style="font-size:11px;color:var(--muted)">0 pt</span></button>
+      <button class="btn btn-joker" id="btn-boomerang"><i class="fa-solid fa-rotate-left" style="color:var(--teal)"></i>Boomerang<span style="font-size:11px;color:var(--muted)">Renvoyer</span></button>
+    </div>
+  </div>
+
+  <!-- GAME: EVALUATE VIEW -->
+  <div id="screen-eval" class="screen" style="padding-top:80px;gap:24px">
+    <div style="text-align:center">
+      <span style="font-size:13px;color:var(--muted)" id="eval-subtitle">Évaluez la réponse</span>
+      <h2 style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;margin-top:4px">Ça dit quoi ?</h2>
+    </div>
+    <div class="q-card coral">
+      <div class="q-card-header"><i class="fa-regular fa-message"></i> Question</div>
+      <p class="q-card-text" id="eval-q-text">...</p>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:auto">
+      <button class="eval-btn bad" id="btn-eval-bad"><span class="pts">0</span>Pas convaincu(e)</button>
+      <button class="eval-btn medium" id="btn-eval-med"><span class="pts">1</span>Moyenne</button>
+      <button class="eval-btn perfect" id="btn-eval-perf"><span class="pts">3</span>Parfaite</button>
+    </div>
+  </div>
+
+  <!-- VICTORY -->
+  <div id="screen-victory" class="screen" style="justify-content:center;align-items:center;text-align:center;gap:24px">
+    <div class="victory-crown"><i class="fa-solid fa-crown"></i></div>
+    <div>
+      <div style="font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px">Partie terminée</div>
+      <h1 style="font-family:'Playfair Display',serif;font-size:34px;font-weight:900" id="v-winner">Gagnant</h1>
+      <p style="color:var(--txt2);font-size:15px;margin-top:8px" id="v-subtitle">Titre</p>
+    </div>
+    <div style="width:100%;display:flex;flex-direction:column;gap:14px">
+      <div style="text-align:left"><div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600"><span id="v-n1">P1</span><span id="v-s1">0</span></div><div class="score-bar-v"><div class="score-bar-fill" id="v-f1" style="width:0%;background:var(--coral)"></div></div></div>
+      <div style="text-align:left"><div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600"><span id="v-n2">P2</span><span id="v-s2">0</span></div><div class="score-bar-v"><div class="score-bar-fill" id="v-f2" style="width:0%;background:var(--teal)"></div></div></div>
+    </div>
+    <button class="btn btn-primary btn-block" id="btn-replay"><i class="fa-solid fa-rotate-right"></i> Rejouer</button>
+  </div>
+
+  <div id="score-popup"><div class="sp-card"><div class="sp-amount" id="sp-amount">+3</div><div style="font-size:16px;color:var(--txt2);margin-top:8px" id="sp-label">Parfaite !</div></div></div>
+  <div id="toast"></div>
+  <canvas id="confetti"></canvas>
+</div>
+
+<script>
+/* =========================================
+   ÉTAT & CONFIG
+   ========================================= */
+const $ = id => document.getElementById(id);
+let peer, conn;
+let myRole = null; // 'host' | 'guest'
+let myIndex = 0;   // 0 ou 1
+let count = 10;
+
+const players = [
+  { name: '', questions: [], score: 0, shield: true, boomerang: true },
+  { name: '', questions: [], score: 0, shield: true, boomerang: true }
+];
+
+let turnQueue = [];
+let turnIndex = 0;
+let myPrepIndex = 0;
+let isGameStarted = false;
+
+/* =========================================
+   RÉSEAUX (PeerJS WebRTC)
+   ========================================= */
+function generateCode() {
+  return 'ENM-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+}
+
+function initPeer(customId) {
+  peer = new Peer(customId, { debug: 0 });
+  
+  peer.on('open', id => {
+    if (myRole === 'host') {
+      $('room-code').textContent = id.replace('enm-','').toUpperCase();
+    }
+  });
+
+  peer.on('connection', c => {
+    conn = c;
+    setupConnection();
+  });
+
+  peer.on('error', err => {
+    console.error(err);
+    if (err.type === 'peer-unavailable') toast('Code invalide ou salon fermé');
+    else toast('Erreur de connexion');
+  });
+}
+
+function setupConnection() {
+  conn.on('open', () => {
+    if (myRole === 'guest') {
+      send({ type: 'JOIN', name: players[myIndex].name });
+      showScreen('prep');
+      $('config-area').style.display = 'none'; // Le guest ne choisit pas
+    } else if (myRole === 'host') {
+      showScreen('prep');
+    }
+  });
+
+  conn.on('data', handleNetwork);
+
+  conn.on('close', () => {
+    if (isGameStarted) toast('Votre partenaire s'est déconnecté');
+    else showScreen('lobby');
+  });
+}
+
+function send(data) {
+  if (conn && conn.open) conn.send(data);
+}
+
+/* =========================================
+   ROUTAGE RÉSEAU
+   ========================================= */
+function handleNetwork(data) {
+  switch(data.type) {
+    case 'JOIN':
+      players[1].name = data.name;
+      $('sb-name2').textContent = data.name;
+      // Envoyer la config au guest
+      send({ type: 'CONFIG', count: count, hostName: players[0].name });
+      break;
+
+    case 'CONFIG':
+      count = data.count;
+      players[0].name = data.hostName;
+      $('sb-name1').textContent = data.hostName;
+      $('sb-name2').textContent = players[1].name;
+      updatePrepUI();
+      break;
+
+    case 'READY':
+      const otherIndex = myIndex === 0 ? 1 : 0;
+      players[otherIndex].questions = data.questions;
+      players[otherIndex].name = data.name; // Sécurité
+      checkGameStart();
+      break;
+
+    case 'TURN_ANSWER':
+      handleAnswer(data);
+      break;
+
+    case 'TURN_BOOM_ANSWER':
+      handleBoomAnswer();
+      break;
+
+    case 'TURN_EVAL':
+      handleEval(data);
+      break;
+  }
+}
+
+/* =========================================
+   UI & NAVIGATION
+   ========================================= */
+let currentScreen = 'screen-lobby';
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+  currentScreen = id;
+}
+
+let toastTimer;
+function toast(msg) {
+  $('toast').textContent = msg;
+  $('toast').classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3000);
+}
+
+function showScoreBar() {
+  $('score-bar').classList.add('visible');
+  $('progress-bar').classList.add('visible');
+  updateScoreUI();
+}
+function hideScoreBar() {
+  $('score-bar').classList.remove('visible');
+  $('progress-bar').classList.remove('visible');
+}
+function updateScoreUI() {
+  $('sb-score1').textContent = players[0].score;
+  $('sb-score2').textContent = players[1].score;
+  const pct = turnQueue.length ? (turnIndex / turnQueue.length) * 100 : 0;
+  $('progress-fill').style.width = pct + '%';
+  $('sb-center').textContent = `${Math.min(turnIndex+1, turnQueue.length)}/${turnQueue.length}`;
+}
+function popScore(i) {
+  const el = i === 0 ? $('sb-score1') : $('sb-score2');
+  el.classList.add('pop');
+  setTimeout(() => el.classList.remove('pop'), 300);
+}
+
+function showScorePopup(amount, label, color, cb) {
+  $('sp-amount').textContent = amount >= 0 ? `+${amount}` : `${amount}`;
+  $('sp-amount').style.color = color;
+  $('sp-label').textContent = label;
+  $('score-popup').classList.add('show');
+  setTimeout(() => { $('score-popup').classList.remove('show'); setTimeout(cb, 300); }, 1200);
+  $('score-popup').onclick = () => { $('score-popup').classList.remove('show'); $('score-popup').onclick=null; setTimeout(cb, 300); };
+}
+
+/* =========================================
+   LOBBY
+   ========================================= */
+ $('btn-create').addEventListener('click', () => {
+  const name = $('my-name').value.trim();
+  if (!name) return toast('Entrez votre prénom');
+  myRole = 'host'; myIndex = 0;
+  players[0].name = name;
+  $('sb-name1').textContent = name;
+  const code = 'enm-' + Math.random().toString(36).substring(2, 6).toLowerCase();
+  initPeer(code);
+  showScreen('waiting');
+});
+
+ $('btn-join').addEventListener('click', () => {
+  const name = $('my-name').value.trim();
+  const code = $('join-code').value.trim().toLowerCase();
+  if (!name) return toast('Entrez votre prénom');
+  if (!code) return toast('Entrez le code du salon');
+  myRole = 'guest'; myIndex = 1;
+  players[1].name = name;
+  $('sb-name2').textContent = name;
+  initPeer(); // ID aléatoire pour le guest
+  conn = peer.connect('enm-' + code.replace('enm-',''));
+  setupConnection();
+});
+
+ $('btn-cancel-wait').addEventListener('click', () => {
+  if(peer) peer.destroy();
+  showScreen('lobby');
+});
+
+ $('room-code').addEventListener('click', () => {
+  const code = $('room-code').textContent;
+  navigator.clipboard.writeText(code).then(() => toast('Code copié !')).catch(() => {});
+});
+
+// Pills
+document.querySelectorAll('#prep-pills .pill').forEach(p => {
+  p.addEventListener('click', () => {
+    if (myRole !== 'host') return;
+    document.querySelectorAll('#prep-pills .pill').forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+    count = parseInt(p.dataset.count);
+    // Envoyer la mise à jour au guest si déjà connecté
+    send({ type: 'CONFIG', count: count, hostName: players[0].name });
+    updatePrepUI();
+  });
+});
+
+/* =========================================
+   PRÉPARATION
+   ========================================= */
+function updatePrepUI() {
+  $('prep-counter').textContent = `${myPrepIndex + 1}/${count}`;
+  $('prep-progress').style.width = ((myPrepIndex / count) * 100) + '%';
+  $('btn-prep-val').innerHTML = myPrepIndex === count - 1 
+    ? 'Terminer <i class="fa-solid fa-check"></i>' 
+    : 'Question suivante <i class="fa-solid fa-arrow-right"></i>';
+}
+
+const SUGGESTIONS = [
+  "Quel est mon plat préféré en ce moment ?", "Quelle est ma plus grande peur que tu connais ?",
+  "Quel souvenir ensemble me rend le plus heureux/heureuse ?", "Si je pouvais voyager n'importe où demain, où est-ce que j'irais ?",
+  "Qu'est-ce qui me met le plus en colère sans que je le dise ?", "Quel est le premier truc que j'ai remarqué chez toi ?",
+  "Quelle est ma qualité que je sous-estime ?", "Si on adoptait un animal, lequel choisirais-je ?",
+  "Quelle chanson me fait penser à nous ?", "Quel est mon rêve le plus fou que je t'ai confié ?",
+  "Comment je réagis quand je suis stressé(e) ?", "Quelle était ma première impression de toi, en vrai ?",
+  "Quelle est la chose la plus mignonne que j'ai faite sans m'en rendre compte ?", "Si on se retrouvait sur une île déserte, quel objet me manquerait le plus ?",
+  "Quelle est ma série coup de cœur en ce moment ?", "Comment je prends mon café ou mon thé ?",
+  "Qu'est-ce qui me fait rire aux éclats ?", "Quel est mon geste d'affection préféré ?"
+];
+
+ $('btn-inspo').addEventListener('click', () => {
+  const el = $('inspo-text');
+  if (el.style.display === 'none' || !el.style.display) {
+    el.textContent = SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+});
+
+ $('inspo-text').addEventListener('click', () => {
+  $('inspo-text').textContent = SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
+});
+
+ $('btn-prep-val').addEventListener('click', () => {
+  const q = $('prep-input').value.trim();
+  if (q.length < 5) return toast('Question trop courte (min 5 caractères)');
+  players[myIndex].questions.push(q);
+  myPrepIndex++;
+  $('prep-input').value = '';
+  $('inspo-text').style.display = 'none';
+
+  if (myPrepIndex >= count) {
+    // Envoi des questions
+    send({ type: 'READY', questions: players[myIndex].questions, name: players[myIndex].name });
+    showScreen('waiting-prep');
+    checkGameStart();
+  } else {
+    updatePrepUI();
+    $('prep-input').focus();
+  }
+});
+
+ $('prep-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('btn-prep-val').click(); }
+});
+
+function checkGameStart() {
+  if (players[0].questions.length === count && players[1].questions.length === count) {
+    buildQueue();
+    startGame();
+  }
+}
+
+/* =========================================
+   BOUCLE DE JEU
+   ========================================= */
+function buildQueue() {
+  turnQueue = [];
+  for (let i = 0; i < count; i++) {
+    turnQueue.push({ asker: 0, qi: i });
+    turnQueue.push({ asker: 1, qi: i });
+  }
+}
+
+function startGame() {
+  isGameStarted = true;
+  turnIndex = 0;
+  showScoreBar();
+  playTurn();
+}
+
+function playTurn() {
+  if (turnIndex >= turnQueue.length) return endGame();
+  updateScoreUI();
+  
+  const turn = turnQueue[turnIndex];
+  const askerI = turn.asker;
+  const responderI = askerI === 0 ? 1 : 0;
+  const question = players[askerI].questions[turn.qi];
+
+  if (myIndex === askerI) {
+    // Je pose la question
+    $('ask-target-name').textContent = players[responderI].name;
+    $('ask-q-text').textContent = question;
+    showScreen('ask');
+  } else {
+    // Je réponds
+    $('resp-asker-name').textContent = players[askerI].name;
+    $('resp-q-text').textContent = question;
+    $('btn-shield').disabled = !players[myIndex].shield;
+    $('btn-boomerang').disabled = !players[myIndex].boomerang;
+    showScreen('respond');
+  }
+}
+
+/* --- Actions Répondant --- */
+ $('btn-answered').addEventListener('click', () => send({ type: 'TURN_ANSWER', joker: 'none' }));
+ $('btn-shield').addEventListener('click', () => {
+  players[myIndex].shield = false;
+  send({ type: 'TURN_ANSWER', joker: 'shield' });
+});
+ $('btn-boomerang').addEventListener('click', () => {
+  players[myIndex].boomerang = false;
+  send({ type: 'TURN_ANSWER', joker: 'boomerang' });
+  
+  // L'asker devient répondant de son propre jet
+  const turn = turnQueue[turnIndex];
+  const question = players[turn.asker].questions[turn.qi];
+  
+  $('resp-asker-name').textContent = 'BOOMERANG !';
+  $('resp-asker-name').style.color = 'var(--teal)';
+  $('resp-q-text').textContent = question;
+  $('btn-answered').innerHTML = '<i class="fa-solid fa-rotate-left"></i> J\'ai répondu à ma propre question';
+  
+  // Cacher les jokers
+  $('btn-shield').style.display = 'none';
+  $('btn-boomerang').style.display = 'none';
+  document.querySelector('#screen-respond > p').textContent = "L'attaquant répond à sa propre question !";
+  
+  // Réinitialiser au prochain tour
+  const resetUI = () => {
+    $('resp-asker-name').style.color = '';
+    $('btn-answered').innerHTML = '<i class="fa-solid fa-check"></i> J\'ai répondu';
+    $('btn-shield').style.display = '';
+    $('btn-boomerang').style.display = '';
+    document.querySelector('#screen-respond > p').textContent = 'Répondez à voix haute, puis validez';
+    $('btn-answered').removeEventListener('click', boomHandler);
+  };
+  
+  const boomHandler = () => {
+    resetUI();
+    send({ type: 'TURN_BOOM_ANSWER' });
+  };
+  // Override temporaire
+  $('btn-answered').replaceWith($('btn-answered').cloneNode(true));
+  $('btn-answered').id = 'btn-answered';
+  $('btn-answered').addEventListener('click', boomHandler);
+});
+
+/* --- Réception côté Poseur --- */
+function handleAnswer(data) {
+  const responderI = myIndex === 0 ? 1 : 0;
+  if (data.joker === 'shield') {
+    showScorePopup(0, 'Bouclier activé !', 'var(--coral)', nextTurn);
+  } else if (data.joker === 'boomerang') {
+    // Je dois répondre à ma propre question
+    const turn = turnQueue[turnIndex];
+    const question = players[myIndex].questions[turn.qi];
+    
+    $('ask-target-name').textContent = 'BOOMERANG !';
+    $('ask-target-name').style.color = 'var(--teal)';
+    $('ask-q-text').textContent = question;
+    
+    // Remplacer le waiting par un bouton
+    const waitDiv = document.querySelector('#screen-ask > div:nth-child(3)');
+    waitDiv.innerHTML = `<p style="color:var(--muted);margin-bottom:12px;font-size:14px">Répondez à votre propre question !</p><button class="btn btn-primary btn-block" id="btn-boom-val"><i class="fa-solid fa-check"></i> J'ai répondu</button>`;
+    
+    document.getElementById('btn-boom-val').addEventListener('click', () => {
+      $('ask-target-name').style.color = '';
+      send({ type: 'TURN_BOOM_ANSWER' });
+    });
+  } else {
+    // Réponse normale, j'évalue
+    showEvalScreen();
+  }
+}
+
+function handleBoomAnswer() {
+  // Le poseur original a répondu au boomerang, c'est au répondeur (moi) d'évaluer
+  showEvalScreen();
+}
+
+function showEvalScreen() {
+  const turn = turnQueue[turnIndex];
+  const question = players[turn.asker].questions[turn.qi];
+  $('eval-subtitle').textContent = `Évaluez la réponse de ${players[turn.asker === myIndex ? (myIndex===0?1:0) : turn.asker].name}`;
+  $('eval-q-text').textContent = question;
+  showScreen('eval');
+}
+
+/* --- Actions Évaluateur --- */
+function doEval(pts, label, color) {
+  // Qui gagne les points ? Celui qui a répondu.
+  const turn = turnQueue[turnIndex];
+  let scorerI = turn.asker === myIndex ? (myIndex===0?1:0) : turn.asker;
+  
+  // Si boomerang, c'est l'asker qui a répondu en dernier
+  // La logique reste : scorerI est celui qui n'est pas l'évaluateur (myIndex)
+  scorerI = myIndex === 0 ? 1 : 0;
+  
+  players[scorerI].score += pts;
+  updateScoreUI();
+  popScore(scorerI);
+  
+  send({ type: 'TURN_EVAL', score: pts, scorer: scorerI });
+  showScorePopup(pts, label, color, nextTurn);
+}
+
+ $('btn-eval-perf').addEventListener('click', () => doEval(3, 'Parfaite !', 'var(--gold)'));
+ $('btn-eval-med').addEventListener('click', () => doEval(1, 'Moyenne', 'var(--txt2)'));
+ $('btn-eval-bad').addEventListener('click', () => doEval(0, 'Pas convaincu(e)', 'var(--danger)'));
+
+/* --- Réception côté Répondant (pour maj du score) --- */
+function handleEval(data) {
+  // Met à jour le score de manière sécurisée
+  players[data.scorer].score += 0; // Déjà géré par l'évaluateur, mais on sync l'affichage
+  updateScoreUI();
+  nextTurn();
+}
+
+function nextTurn() {
+  turnIndex++;
+  setTimeout(playTurn, 200);
+}
+
+/* =========================================
+   FIN DE PARTIE
+   ========================================= */
+function endGame() {
+  hideScoreBar();
+  const s1 = players[0].score, s2 = players[1].score;
+  const max = Math.max(s1, s2, 1);
+  let winner, sub;
+  
+  if (s1 > s2) { winner = players[0].name; const d=s1-s2; sub = d>15?'Oracle de la relation':d>7?'Vrai connaisseur':'Victoire de justesse !'; }
+  else if (s2 > s1) { winner = players[1].name; const d=s2-s1; sub = d>15?'Oracle de la relation':d>7?'Vraie connaisseuse':'Victoire de justesse !'; }
+  else { winner = 'Égalité parfaite'; sub = 'Sur la même longueur d\'onde'; }
+
+  $('v-winner').textContent = winner;
+  $('v-subtitle').textContent = sub;
+  $('v-n1').textContent = players[0].name; $('v-s1').textContent = s1 + ' pts';
+  $('v-n2').textContent = players[1].name; $('v-s2').textContent = s2 + ' pts';
+  
+  showScreen('victory');
+  setTimeout(() => {
+    $('v-f1').style.width = (s1/max*100)+'%';
+    $('v-f2').style.width = (s2/max*100)+'%';
+  }, 100);
+  setTimeout(launchConfetti, 400);
+}
+
+ $('btn-replay').addEventListener('click', () => location.reload());
+
+/* =========================================
+   CONFETTIS
+   ========================================= */
+function launchConfetti() {
+  const c = $('confetti'), ctx = c.getContext('2d');
+  c.width = window.innerWidth; c.height = window.innerHeight;
+  const colors = ['#e8845c','#5cb8b2','#f0c75e','#f0ebe3','#e85c6a','#5ce88a'];
+  const p = Array.from({length: 120}, () => ({
+    x: Math.random()*c.width, y: -Math.random()*c.height*0.8-20,
+    w: Math.random()*8+4, h: Math.random()*5+2,
+    col: colors[Math.floor(Math.random()*colors.length)],
+    vx: (Math.random()-0.5)*4, vy: Math.random()*3+1.5,
+    r: Math.random()*360, rv: (Math.random()-0.5)*12, o: 1
+  }));
+  let f=0;
+  (function anim(){
+    f++; ctx.clearRect(0,0,c.width,c.height);
+    if(f>200){ctx.clearRect(0,0,c.width,c.height);return;}
+    for(const k of p){
+      k.x+=k.vx;k.y+=k.vy;k.vy+=0.04;k.r+=k.rv;
+      if(f>140)k.o-=0.016;
+      ctx.save();ctx.translate(k.x,k.y);ctx.rotate(k.r*Math.PI/180);
+      ctx.globalAlpha=Math.max(0,k.o);ctx.fillStyle=k.col;
+      ctx.fillRect(-k.w/2,-k.h/2,k.w,k.h);ctx.restore();
+    }
+    requestAnimationFrame(anim);
+  })();
+}
+</script>
+</body>
+</html>
